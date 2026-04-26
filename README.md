@@ -1,0 +1,143 @@
+# IntentGaps.com
+
+Cloudflare Pages app for automatically finding intent gaps in a page of content.
+
+## What it does
+
+1. User enters a URL and clicks **Fetch page**.
+2. A Pages Function fetches the page, stores the rendered DOM, extracts the visible content, detects topic/country/language, and stores the report in KV.
+3. User reviews the topic, country, and language.
+4. A Pages Function calls AlsoAsked for People Also Ask questions, asks OpenAI to filter the relevant questions, then classifies each one as `full`, `partial`, or `not`.
+5. The frontend displays a traffic-light scorecard.
+
+## Architecture
+
+- Frontend: Vite + React, built to static files in `dist`.
+- Backend: Cloudflare Pages Functions in `functions/api`.
+- Storage: Cloudflare Workers KV binding named `INTENTGAPS_KV`.
+- Scraping: Cloudflare Browser Rendering `/content` Quick Action when `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_BROWSER_RENDERING_TOKEN` are set.
+- AI: OpenAI Chat Completions API, default model `gpt-4o-mini`.
+- AlsoAsked: `POST https://alsoaskedapi.com/v1/search` by default, overridable with `ALSOASKED_BASE_URL`.
+
+## Required Cloudflare resources
+
+Create a KV namespace:
+
+```bash
+npx wrangler kv namespace create INTENTGAPS_KV
+npx wrangler kv namespace create INTENTGAPS_KV --preview
+```
+
+Put the returned IDs into `wrangler.toml`:
+
+```toml
+[[kv_namespaces]]
+binding = "INTENTGAPS_KV"
+id = "your_production_namespace_id"
+preview_id = "your_preview_namespace_id"
+```
+
+## Secure environment variables
+
+Set these in Cloudflare Pages under **Workers & Pages → your Pages project → Settings → Environment variables**.
+
+Do **not** prefix any secret with `VITE_`. Vite exposes `VITE_` variables to browser code. These variables are only read by Pages Functions.
+
+| Variable | Required | Example | Notes |
+| --- | --- | --- | --- |
+| `OPENAI_API_KEY` | Yes | `sk-...` | Server-side only. |
+| `ALSOASKED_API_KEY` | Yes | `aa_...` | Server-side only. |
+| `CLOUDFLARE_ACCOUNT_ID` | Yes for rendered Chromium scraping | `abc123...` | Needed for Browser Rendering REST API. |
+| `CLOUDFLARE_BROWSER_RENDERING_TOKEN` | Yes for rendered Chromium scraping | `...` | Create a Cloudflare API token with Browser Rendering edit permission. |
+| `ALSOASKED_BASE_URL` | Recommended | `https://alsoaskedapi.com` | Defaults to this value. |
+| `OPENAI_MODEL` | Recommended | `gpt-4o-mini` | Cheap model used for classification. |
+| `APP_MOCK_MODE` | Recommended | `false` | Set `true` only for local/demo testing without real APIs. |
+
+## Cloudflare Pages deployment
+
+### Option A: Git-connected Pages
+
+1. Push this folder to a GitHub repository.
+2. In Cloudflare, create a new Pages project from the repo.
+3. Set build command:
+
+```bash
+npm install && npm run build
+```
+
+4. Set build output directory:
+
+```text
+dist
+```
+
+5. Add the KV binding under **Settings → Bindings → Add → KV namespace** with variable name:
+
+```text
+INTENTGAPS_KV
+```
+
+6. Add all environment variables from the table above.
+7. Deploy.
+8. In the Pages project, add the custom domain `intentgaps.com`.
+
+### Option B: Wrangler upload
+
+```bash
+npm install
+npm run build
+npx wrangler pages deploy dist --project-name intentgaps
+```
+
+After deployment, add the same KV binding and environment variables in the Cloudflare dashboard, then redeploy.
+
+## Local development
+
+Create `.dev.vars` locally:
+
+```text
+APP_MOCK_MODE=true
+OPENAI_MODEL=gpt-4o-mini
+ALSOASKED_BASE_URL=https://alsoaskedapi.com
+```
+
+Build and run the Pages Functions runtime:
+
+```bash
+npm install
+npm run build
+npm run cf:dev
+```
+
+Open:
+
+```text
+http://127.0.0.1:8788
+```
+
+To test with real APIs locally, put real values in `.dev.vars`:
+
+```text
+APP_MOCK_MODE=false
+OPENAI_API_KEY=...
+ALSOASKED_API_KEY=...
+CLOUDFLARE_ACCOUNT_ID=...
+CLOUDFLARE_BROWSER_RENDERING_TOKEN=...
+```
+
+Never commit `.dev.vars`.
+
+## Important implementation notes
+
+- If Cloudflare Browser Rendering credentials are missing, the app falls back to a static HTML fetch. Production should set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_BROWSER_RENDERING_TOKEN` to meet the JavaScript-rendered Chromium scraping requirement.
+- The full DOM, extracted visible text, main content, AlsoAsked raw response, and final score are stored in KV under `report:{id}` with a 24-hour TTL.
+- The public report endpoint deliberately strips the stored DOM, visible text, main content, and raw AlsoAsked payload before returning JSON.
+- URL validation blocks non-HTTP(S) and local/private hostnames.
+- AlsoAsked searches use `depth: 2`, `fresh: false`, and `async: false` to keep the demo quick and cheaper by preferring cached results.
+
+## Test commands
+
+```bash
+npm run check
+npm run build
+```
