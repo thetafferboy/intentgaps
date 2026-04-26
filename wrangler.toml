@@ -3,9 +3,9 @@ pages_build_output_dir = "dist"
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat"]
 
-# [[kv_namespaces]]
-# binding = "INTENTGAPS_KV"
-# id = "replace_with_production_kv_namespace_id"
+[[kv_namespaces]]
+binding = "INTENTGAPS_KV"
+id = "516fa3c94bb4438185f07d566221df6d"
 # preview_id = "replace_with_preview_kv_namespace_id"
 
 [vars]
