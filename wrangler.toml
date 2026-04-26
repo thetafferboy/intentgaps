@@ -5,8 +5,8 @@ compatibility_flags = ["nodejs_compat"]
 
 [[kv_namespaces]]
 binding = "INTENTGAPS_KV"
-id = "516fa3c94bb4438185f07d566221df6d"
-# preview_id = "replace_with_preview_kv_namespace_id"
+id = "replace_with_production_kv_namespace_id"
+preview_id = "replace_with_preview_kv_namespace_id"
 
 [vars]
 ALSOASKED_BASE_URL = "https://alsoaskedapi.com"
