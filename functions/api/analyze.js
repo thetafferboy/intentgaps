@@ -1,7 +1,7 @@
 import { fetchAlsoAsked } from "../_lib/alsoasked.js";
 import { badRequest, isMock, json, kvGet, kvPut, readJson, serverError } from "../_lib/http.js";
 import { mockQuestions, mockScores } from "../_lib/mock.js";
-import { filterRelevantQuestions, scoreQuestions } from "../_lib/openai.js";
+import { filterRelevantQuestions, generateFallbackQuestions, scoreQuestions } from "../_lib/openai.js";
 
 function calculateScore(answers) {
   const maxScore = answers.length * 3;
@@ -12,10 +12,6 @@ function calculateScore(answers) {
   }, 0);
   const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
   return { score, maxScore, percentage };
-}
-
-function noQuestionsMessage(topic) {
-  return `AlsoAsked did not return any questions for "${topic}". Please try manually redefining the page topic above, then run the search again.`;
 }
 
 export async function onRequestPost({ request, env }) {
@@ -34,6 +30,8 @@ export async function onRequestPost({ request, env }) {
     let alsoAsked;
     let relevantQuestions;
     let answers;
+    let questionSource = "alsoasked";
+    let sourceNotice = "";
 
     if (isMock(env)) {
       alsoAsked = {
@@ -45,25 +43,35 @@ export async function onRequestPost({ request, env }) {
     } else {
       alsoAsked = await fetchAlsoAsked(env, topic, countryCode, languageCode);
       if (!alsoAsked.questions.length) {
-        return badRequest(noQuestionsMessage(topic), {
-          reason: "alsoasked_no_questions",
-          topic,
-          countryCode,
-          languageCode
-        });
-      }
-      relevantQuestions = await filterRelevantQuestions(env, record.mainContent, alsoAsked.questions);
-      if (!relevantQuestions.length) {
-        return badRequest(
-          `AlsoAsked returned questions for "${topic}", but none looked directly relevant to this page content. Please try manually redefining the page topic above, then run the search again.`,
-          {
-            reason: "no_relevant_questions",
-            topic,
-            countryCode,
-            languageCode,
-            allQuestionCount: alsoAsked.questions.length
-          }
-        );
+        relevantQuestions = await generateFallbackQuestions(env, topic);
+        questionSource = "genai_fallback";
+        sourceNotice = "No Google PAA questions for this topic, used GenAI as a fallback";
+
+        if (!relevantQuestions.length) {
+          return badRequest(
+            `AlsoAsked did not return any questions for "${topic}", and the GenAI fallback could not produce questions. Please try manually redefining the page topic above, then run the search again.`,
+            {
+              reason: "no_questions_from_alsoasked_or_genai",
+              topic,
+              countryCode,
+              languageCode
+            }
+          );
+        }
+      } else {
+        relevantQuestions = await filterRelevantQuestions(env, record.mainContent, alsoAsked.questions);
+        if (!relevantQuestions.length) {
+          return badRequest(
+            `AlsoAsked returned questions for "${topic}", but none looked directly relevant to this page content. Please try manually redefining the page topic above, then run the search again.`,
+            {
+              reason: "no_relevant_questions",
+              topic,
+              countryCode,
+              languageCode,
+              allQuestionCount: alsoAsked.questions.length
+            }
+          );
+        }
       }
       answers = await scoreQuestions(env, record.mainContent, relevantQuestions);
     }
@@ -77,6 +85,8 @@ export async function onRequestPost({ request, env }) {
       alsoAskedRaw: alsoAsked.raw,
       alsoAskedQuestions: alsoAsked.questions,
       relevantQuestions,
+      questionSource,
+      sourceNotice,
       answers,
       ...totals,
       analysedAt: new Date().toISOString()
@@ -93,6 +103,8 @@ export async function onRequestPost({ request, env }) {
       extractionMode: record.extractionMode,
       questionCount: relevantQuestions.length,
       allQuestionCount: alsoAsked.questions.length,
+      questionSource,
+      sourceNotice,
       answers,
       ...totals
     });

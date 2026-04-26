@@ -415,6 +415,13 @@ function Scorecard({ result, reset }) {
         <SummaryPill tone="red" label="Not answered" value={counts.not} />
       </div>
 
+      {result?.sourceNotice ? (
+        <div className="fallback-notice" role="status" data-testid="notice-question-source">
+          <Sparkles size={18} />
+          <p>{result.sourceNotice}</p>
+        </div>
+      ) : null}
+
       <section className="report-card" aria-labelledby="report-title">
         <h2 id="report-title">Question score card</h2>
         <div className="question-list">

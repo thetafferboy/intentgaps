@@ -93,6 +93,32 @@ export async function filterRelevantQuestions(env, mainContent, questions) {
   return Array.isArray(parsed.relevant) ? parsed.relevant.filter((question) => allowed.has(question)) : [];
 }
 
+export async function generateFallbackQuestions(env, topic) {
+  const raw = await callOpenAI(
+    env,
+    [
+      {
+        role: "system",
+        content:
+          "You generate likely user questions for SEO content analysis. Return strict JSON only. Do not include numbering, commentary, or markdown."
+      },
+      {
+        role: "user",
+        content: `List what you think are the top 10 most commonly asked questions about ${topic}. Return the questions in a 1d array.\n\nReturn JSON in this exact shape: {"questions":["question 1","question 2"]}.`
+      }
+    ],
+    { json: true, temperature: 0.2 }
+  );
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed.questions)) return [];
+
+  return parsed.questions
+    .map((question) => String(question || "").trim())
+    .filter(Boolean)
+    .filter((question, index, array) => array.indexOf(question) === index)
+    .slice(0, 10);
+}
+
 export async function scoreQuestions(env, mainContent, questions) {
   const content = mainContent.slice(0, 26000);
   const raw = await callOpenAI(
