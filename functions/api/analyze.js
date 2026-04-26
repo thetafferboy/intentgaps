@@ -14,6 +14,10 @@ function calculateScore(answers) {
   return { score, maxScore, percentage };
 }
 
+function noQuestionsMessage(topic) {
+  return `AlsoAsked did not return any questions for "${topic}". Please try manually redefining the page topic above, then run the search again.`;
+}
+
 export async function onRequestPost({ request, env }) {
   const body = await readJson(request);
   if (!body?.id) return badRequest("Missing report id.");
@@ -40,7 +44,27 @@ export async function onRequestPost({ request, env }) {
       answers = mockScores(relevantQuestions);
     } else {
       alsoAsked = await fetchAlsoAsked(env, topic, countryCode, languageCode);
+      if (!alsoAsked.questions.length) {
+        return badRequest(noQuestionsMessage(topic), {
+          reason: "alsoasked_no_questions",
+          topic,
+          countryCode,
+          languageCode
+        });
+      }
       relevantQuestions = await filterRelevantQuestions(env, record.mainContent, alsoAsked.questions);
+      if (!relevantQuestions.length) {
+        return badRequest(
+          `AlsoAsked returned questions for "${topic}", but none looked directly relevant to this page content. Please try manually redefining the page topic above, then run the search again.`,
+          {
+            reason: "no_relevant_questions",
+            topic,
+            countryCode,
+            languageCode,
+            allQuestionCount: alsoAsked.questions.length
+          }
+        );
+      }
       answers = await scoreQuestions(env, record.mainContent, relevantQuestions);
     }
 

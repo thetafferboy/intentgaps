@@ -18,6 +18,9 @@ import {
   Sun
 } from "lucide-react";
 
+const DEFAULT_TEST_URL = "https://www.pcgamer.com/best-gaming-chairs/";
+const DEFAULT_TEST_TOPIC = "best gaming chairs";
+
 const COUNTRIES = [
   ["us", "United States"],
   ["gb", "United Kingdom"],
@@ -65,7 +68,7 @@ const pageVariants = {
 function App() {
   const [theme, setTheme] = useState("light");
   const [step, setStep] = useState("home");
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(DEFAULT_TEST_URL);
   const [report, setReport] = useState(null);
   const [topic, setTopic] = useState("");
   const [countryCode, setCountryCode] = useState("us");
@@ -101,8 +104,10 @@ function App() {
     setStep("fetching");
     try {
       const data = await postJson("/api/fetch-page", { url });
+      const enteredDefaultUrl = normalizeUrlForComparison(url) === normalizeUrlForComparison(DEFAULT_TEST_URL);
+      const pageTopic = enteredDefaultUrl ? DEFAULT_TEST_TOPIC : data.topic || "";
       setReport(data);
-      setTopic(data.topic || "");
+      setTopic(pageTopic);
       setCountryCode(data.countryCode || "us");
       setLanguageCode(data.languageCode || "en");
       setStep("settings");
@@ -133,7 +138,7 @@ function App() {
 
   function reset() {
     setStep("home");
-    setUrl("");
+    setUrl(DEFAULT_TEST_URL);
     setReport(null);
     setTopic("");
     setCountryCode("us");
@@ -192,6 +197,17 @@ function App() {
       <Footer />
     </div>
   );
+}
+
+function normalizeUrlForComparison(value) {
+  try {
+    const parsed = new URL(String(value).trim());
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return String(value).trim().replace(/\/$/, "");
+  }
 }
 
 function Home({ url, setUrl, fetchPage, error }) {

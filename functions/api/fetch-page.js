@@ -93,6 +93,9 @@ export async function onRequestPost({ request, env }) {
       languages
     });
   } catch (error) {
-    return serverError("Could not fetch and analyse the target page.", error.message);
+    return serverError(
+      "We could not scrape that URL. Please check the page is public, returns visible HTML content, and is not blocking automated browsers.",
+      error.message
+    );
   }
 }
