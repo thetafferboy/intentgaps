@@ -31,8 +31,8 @@ export async function inferTopic(env, sourceType, sourceText) {
   if (!sourceText) return "PLEASE SPECIFY TOPIC";
   const prompt =
     sourceType === "h1"
-      ? "This is the h1 of a web page, I want to reduce it to the topic of the page, removing any brand mentions. Return only the topic."
-      : "This is the title of a web page, I want to reduce it to the topic of the page, removing any brand mentions. Return only the topic.";
+      ? "This is the h1 of a web page, preserve as much of the page title as possible, but remove anything considered to be a brand mention, I simply want it to succinctly describe the page contents. Return only the topic."
+      : "This is the title of a web page, preserve as much of the page title as possible, but remove anything considered to be a brand mention, I simply want it to succinctly describe the page contents. Return only the topic.";
   const content = await callOpenAI(env, [
     { role: "system", content: "You are a concise SEO assistant. Return only the requested short phrase." },
     { role: "user", content: `${prompt}\n\n${sourceText}` }
