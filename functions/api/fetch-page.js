@@ -7,6 +7,48 @@ function fallbackTopic(h1, title) {
   return h1 || title || "PLEASE SPECIFY TOPIC";
 }
 
+const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+
+const TURNSTILE_ERROR_MESSAGES = {
+  "missing-input-response": "Please complete the verification challenge before fetching a page.",
+  "invalid-input-response": "Verification was invalid. Please complete the challenge again.",
+  "timeout-or-duplicate": "Verification expired or was already used. Please complete the challenge again.",
+  "bad-request": "Verification request was rejected. Please refresh the page and try again."
+};
+
+async function verifyTurnstile(env, token, remoteIp) {
+  if (!env.TURNSTILE_SECRET_KEY) {
+    return { ok: true, skipped: true };
+  }
+  if (!token || typeof token !== "string") {
+    return { ok: false, status: 400, message: TURNSTILE_ERROR_MESSAGES["missing-input-response"] };
+  }
+
+  const formData = new FormData();
+  formData.append("secret", env.TURNSTILE_SECRET_KEY);
+  formData.append("response", token);
+  if (remoteIp) formData.append("remoteip", remoteIp);
+
+  let result;
+  try {
+    const response = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body: formData });
+    result = await response.json();
+  } catch {
+    return {
+      ok: false,
+      status: 502,
+      message: "We could not reach the verification service. Please try again in a moment."
+    };
+  }
+
+  if (result && result.success) return { ok: true };
+
+  const codes = Array.isArray(result?.["error-codes"]) ? result["error-codes"] : [];
+  const firstCode = codes[0];
+  const message = TURNSTILE_ERROR_MESSAGES[firstCode] || "Verification failed. Please complete the challenge again.";
+  return { ok: false, status: 400, message };
+}
+
 async function mockFetchPage(env, url) {
   const id = makeId("report");
   const country = detectCountryFromUrl(url);
@@ -44,6 +86,12 @@ export async function onRequestPost({ request, env }) {
     url = requireUrl(body.url);
   } catch (error) {
     return badRequest(error.message);
+  }
+
+  const remoteIp = request.headers.get("CF-Connecting-IP") || undefined;
+  const verification = await verifyTurnstile(env, body.turnstileToken, remoteIp);
+  if (!verification.ok) {
+    return json({ error: verification.message }, { status: verification.status || 400 });
   }
 
   try {

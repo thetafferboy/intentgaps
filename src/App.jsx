@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
@@ -20,6 +20,8 @@ import {
 
 const DEFAULT_TEST_URL = "https://www.pcgamer.com/best-gaming-chairs/";
 const DEFAULT_TEST_TOPIC = "best gaming chairs";
+
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 
 const COUNTRIES = [
   ["us", "United States"],
@@ -75,6 +77,7 @@ function App() {
   const [languageCode, setLanguageCode] = useState("en");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
 
   useEffect(() => {
     const preferred = window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -101,10 +104,14 @@ function App() {
 
   async function fetchPage(event) {
     event.preventDefault();
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Please complete the verification challenge before fetching the page.");
+      return;
+    }
     setError("");
     setStep("fetching");
     try {
-      const data = await postJson("/api/fetch-page", { url });
+      const data = await postJson("/api/fetch-page", { url, turnstileToken });
       const enteredDefaultUrl = normalizeUrlForComparison(url) === normalizeUrlForComparison(DEFAULT_TEST_URL);
       const pageTopic = enteredDefaultUrl ? DEFAULT_TEST_TOPIC : data.topic || "";
       setReport(data);
@@ -115,6 +122,14 @@ function App() {
     } catch (err) {
       setError(err.message);
       setStep("home");
+      setTurnstileToken("");
+      if (typeof window !== "undefined" && window.turnstile && window.__intentgapsTurnstileWidgetId) {
+        try {
+          window.turnstile.reset(window.__intentgapsTurnstileWidgetId);
+        } catch {
+          // Ignore reset failures.
+        }
+      }
     }
   }
 
@@ -146,6 +161,7 @@ function App() {
     setLanguageCode("en");
     setResult(null);
     setError("");
+    setTurnstileToken("");
   }
 
   return (
@@ -173,7 +189,15 @@ function App() {
       <main id="main" className="main-stage">
         <AnimatePresence mode="wait">
           {step === "home" && (
-            <Home key="home" url={url} setUrl={setUrl} fetchPage={fetchPage} error={error} />
+            <Home
+              key="home"
+              url={url}
+              setUrl={setUrl}
+              fetchPage={fetchPage}
+              error={error}
+              turnstileToken={turnstileToken}
+              setTurnstileToken={setTurnstileToken}
+            />
           )}
           {step === "fetching" && <LoadingPage key="fetching" label="Fetching page" detail="Rendering the target page, executing client-side JavaScript, and saving the DOM." />}
           {step === "settings" && (
@@ -211,7 +235,9 @@ function normalizeUrlForComparison(value) {
   }
 }
 
-function Home({ url, setUrl, fetchPage, error }) {
+function Home({ url, setUrl, fetchPage, error, turnstileToken, setTurnstileToken }) {
+  const turnstileRequired = Boolean(TURNSTILE_SITE_KEY);
+  const fetchDisabled = turnstileRequired && !turnstileToken;
   return (
     <motion.section className="home-page" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
       <div className="hero-grid">
@@ -258,10 +284,19 @@ function Home({ url, setUrl, fetchPage, error }) {
             required
             data-testid="input-url"
           />
-          <button className="primary-button" type="submit" data-testid="button-fetch">
+          <button
+            className="primary-button"
+            type="submit"
+            data-testid="button-fetch"
+            disabled={fetchDisabled}
+            aria-disabled={fetchDisabled}
+          >
             Fetch page <ArrowRight size={18} />
           </button>
         </div>
+        {turnstileRequired ? (
+          <TurnstileWidget token={turnstileToken} setToken={setTurnstileToken} />
+        ) : null}
         {error ? (
           <p className="error-message" role="alert" data-testid="status-error">
             {error}
@@ -279,6 +314,94 @@ function Home({ url, setUrl, fetchPage, error }) {
         </ol>
       </section>
     </motion.section>
+  );
+}
+
+function TurnstileWidget({ token, setToken }) {
+  const containerRef = useRef(null);
+  const widgetIdRef = useRef(null);
+  const [status, setStatus] = useState("loading");
+
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return undefined;
+    let cancelled = false;
+    let pollHandle = null;
+
+    function render() {
+      if (cancelled || !containerRef.current) return;
+      const turnstile = typeof window !== "undefined" ? window.turnstile : null;
+      if (!turnstile || typeof turnstile.render !== "function") {
+        pollHandle = window.setTimeout(render, 200);
+        return;
+      }
+      try {
+        const id = turnstile.render(containerRef.current, {
+          sitekey: TURNSTILE_SITE_KEY,
+          theme: "auto",
+          callback: (value) => {
+            setToken(value);
+            setStatus("verified");
+          },
+          "expired-callback": () => {
+            setToken("");
+            setStatus("expired");
+            try {
+              turnstile.reset(id);
+            } catch {
+              // Ignore reset failures.
+            }
+          },
+          "error-callback": () => {
+            setToken("");
+            setStatus("error");
+          },
+          "timeout-callback": () => {
+            setToken("");
+            setStatus("expired");
+          }
+        });
+        widgetIdRef.current = id;
+        if (typeof window !== "undefined") {
+          window.__intentgapsTurnstileWidgetId = id;
+        }
+        setStatus("ready");
+      } catch {
+        setStatus("error");
+      }
+    }
+
+    render();
+
+    return () => {
+      cancelled = true;
+      if (pollHandle) window.clearTimeout(pollHandle);
+      const turnstile = typeof window !== "undefined" ? window.turnstile : null;
+      if (turnstile && widgetIdRef.current && typeof turnstile.remove === "function") {
+        try {
+          turnstile.remove(widgetIdRef.current);
+        } catch {
+          // Ignore remove failures.
+        }
+      }
+      widgetIdRef.current = null;
+      if (typeof window !== "undefined") {
+        window.__intentgapsTurnstileWidgetId = null;
+      }
+    };
+  }, [setToken]);
+
+  let message = "Verifying you are human before fetching the page.";
+  if (status === "verified" || token) message = "Verification complete. You can now fetch the page.";
+  else if (status === "expired") message = "Verification expired. Please complete the challenge again.";
+  else if (status === "error") message = "Verification could not load. Please refresh and try again.";
+
+  return (
+    <div className="turnstile-panel" data-testid="turnstile-panel">
+      <div ref={containerRef} className="turnstile-widget" aria-label="Cloudflare Turnstile verification" />
+      <p className={`turnstile-status ${status}`} role="status" aria-live="polite" data-testid="turnstile-status">
+        {message}
+      </p>
+    </div>
   );
 }
 
