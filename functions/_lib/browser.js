@@ -31,6 +31,13 @@ function browserRunPayload(url) {
   };
 }
 
+function unavailableScreenshot(reason) {
+  return {
+    available: false,
+    reason
+  };
+}
+
 function imageMimeTypeFromBase64(value) {
   if (value.startsWith("/9j/")) return "image/jpeg";
   if (value.startsWith("iVBOR")) return "image/png";
@@ -42,12 +49,14 @@ function imageMimeTypeFromBase64(value) {
 function normalizeScreenshotDataUrl(value, fallbackMimeType = "image/jpeg") {
   if (!value || typeof value !== "string") return null;
   if (value.startsWith("data:image/")) return value;
+  if (value.length < 100) return null;
   return `data:${fallbackMimeType || imageMimeTypeFromBase64(value)};base64,${value}`;
 }
 
 function screenshotRecord(dataUrl, mode) {
   return dataUrl
     ? {
+        available: true,
         dataUrl,
         capturedAt: new Date().toISOString(),
         mode
@@ -68,7 +77,8 @@ async function fetchRenderedSnapshotViaCloudflare(env, url) {
   });
 
   if (!response.ok) {
-    return null;
+    const text = await response.text();
+    return { html: "", screenshot: unavailableScreenshot(`snapshot endpoint returned ${response.status}: ${text.slice(0, 180)}`) };
   }
 
   const text = await response.text();
@@ -76,16 +86,25 @@ async function fetchRenderedSnapshotViaCloudflare(env, url) {
   try {
     parsed = JSON.parse(text);
   } catch {
-    return null;
+    return { html: "", screenshot: unavailableScreenshot(`snapshot response was not JSON; content-type ${response.headers.get("content-type") || "unknown"}`) };
   }
 
   const payload = parsed?.result && typeof parsed.result === "object" ? parsed.result : parsed;
-  const html = payload?.content || payload?.html || payload?.result?.content || "";
-  const screenshotValue = payload?.screenshot || payload?.image || payload?.result?.screenshot || "";
-  const dataUrl = normalizeScreenshotDataUrl(screenshotValue, payload?.mimeType || payload?.contentType || "image/jpeg");
+  const nested = payload?.result && typeof payload.result === "object" ? payload.result : {};
+  const html = payload?.content || payload?.html || nested?.content || nested?.html || "";
+  const screenshotValue =
+    payload?.screenshot ||
+    payload?.image ||
+    payload?.data ||
+    nested?.screenshot ||
+    nested?.image ||
+    nested?.data ||
+    "";
+  const dataUrl = normalizeScreenshotDataUrl(screenshotValue, payload?.mimeType || payload?.contentType || nested?.mimeType || nested?.contentType || imageMimeTypeFromBase64(String(screenshotValue)));
 
   if (!html && !dataUrl) {
-    return null;
+    const errorMessage = parsed?.errors?.[0]?.message || payload?.errors?.[0]?.message || "snapshot did not include screenshot data";
+    return { html: "", screenshot: unavailableScreenshot(errorMessage) };
   }
 
   return {
@@ -134,9 +153,10 @@ async function arrayBufferToBase64(buffer) {
 
 function jsonScreenshotToDataUrl(parsed) {
   const payload = parsed?.result && typeof parsed.result === "object" ? parsed.result : parsed;
-  const value = payload?.result || payload?.screenshot || payload?.image || payload?.data;
+  const nested = payload?.result && typeof payload.result === "object" ? payload.result : {};
+  const value = typeof payload?.result === "string" ? payload.result : payload?.screenshot || payload?.image || payload?.data || nested?.screenshot || nested?.image || nested?.data;
   if (!value || typeof value !== "string") return null;
-  return normalizeScreenshotDataUrl(value, payload?.mimeType || payload?.contentType || imageMimeTypeFromBase64(value));
+  return normalizeScreenshotDataUrl(value, payload?.mimeType || payload?.contentType || nested?.mimeType || nested?.contentType || imageMimeTypeFromBase64(value));
 }
 
 export async function capturePageScreenshot(env, url) {
@@ -153,25 +173,28 @@ export async function capturePageScreenshot(env, url) {
     });
 
     if (!response.ok) {
-      return null;
+      const text = await response.text();
+      return unavailableScreenshot(`screenshot endpoint returned ${response.status}: ${text.slice(0, 180)}`);
     }
 
     const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("image/")) {
-      const base64 = await arrayBufferToBase64(await response.arrayBuffer());
-      return screenshotRecord(`data:${contentType.split(";")[0]};base64,${base64}`, "cloudflare-browser-run-screenshot");
+    const buffer = await response.arrayBuffer();
+    const base64 = await arrayBufferToBase64(buffer);
+    const inferredMime = contentType.includes("image/") ? contentType.split(";")[0] : imageMimeTypeFromBase64(base64);
+    if (base64 && (contentType.includes("image/") || contentType.includes("application/octet-stream"))) {
+      return screenshotRecord(`data:${inferredMime};base64,${base64}`, "cloudflare-browser-run-screenshot");
     }
 
-    const text = await response.text();
+    const text = new TextDecoder().decode(buffer);
     try {
       const parsed = JSON.parse(text);
       const dataUrl = jsonScreenshotToDataUrl(parsed);
-      return screenshotRecord(dataUrl, "cloudflare-browser-run-screenshot");
+      return screenshotRecord(dataUrl, "cloudflare-browser-run-screenshot") || unavailableScreenshot(parsed?.errors?.[0]?.message || "screenshot JSON did not include image data");
     } catch {
-      return null;
+      return unavailableScreenshot(`screenshot response was ${contentType || "unknown content type"} without image data`);
     }
-  } catch {
-    return null;
+  } catch (error) {
+    return unavailableScreenshot(`screenshot request failed: ${error.message || "unknown error"}`);
   }
 }
 
@@ -221,9 +244,10 @@ export async function scrapePage(env, url) {
     }
   }
 
-  if (!screenshot) {
+  if (!screenshot?.available) {
     try {
-      screenshot = await capturePageScreenshot(env, url);
+      const screenshotFallback = await capturePageScreenshot(env, url);
+      screenshot = screenshotFallback?.available ? screenshotFallback : screenshot || screenshotFallback;
     } catch (error) {
       failures.push(`screenshot failed: ${error.message || "unknown error"}`);
     }

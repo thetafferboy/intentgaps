@@ -579,6 +579,13 @@ input::placeholder {
   color: var(--muted);
 }
 
+.preview-debug {
+  margin-top: 10px !important;
+  font-size: 13px;
+  color: var(--faint) !important;
+  overflow-wrap: anywhere;
+}
+
 .preview-frame {
   position: relative;
   overflow: hidden;

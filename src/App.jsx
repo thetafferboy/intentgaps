@@ -380,6 +380,11 @@ function PagePreview({ screenshot, url }) {
             ? "Captured from the same rendered browser workflow used to analyse the page."
             : "Preview unavailable, but the page content was fetched successfully."}
         </p>
+        {!screenshot?.dataUrl && screenshot?.reason ? (
+          <p className="preview-debug" data-testid="text-preview-debug">
+            Preview reason: {screenshot.reason}
+          </p>
+        ) : null}
       </div>
       <div className={`preview-frame ${screenshot?.dataUrl ? "" : "empty"}`}>
         {screenshot?.dataUrl ? (
