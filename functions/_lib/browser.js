@@ -8,6 +8,91 @@ function hasBrowserRunCredentials(env) {
   return Boolean(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_BROWSER_RENDERING_TOKEN);
 }
 
+function browserRunHeaders(env) {
+  return {
+    "content-type": "application/json",
+    authorization: `Bearer ${env.CLOUDFLARE_BROWSER_RENDERING_TOKEN}`
+  };
+}
+
+function browserRunPayload(url) {
+  return {
+    url,
+    gotoOptions: { waitUntil: "networkidle2", timeout: 4500 },
+    userAgent: BROWSER_USER_AGENT,
+    viewport: { width: 1365, height: 900, deviceScaleFactor: 1 },
+    screenshotOptions: {
+      type: "jpeg",
+      quality: 70,
+      fullPage: false,
+      encoding: "base64"
+    }
+  };
+}
+
+function imageMimeTypeFromBase64(value) {
+  if (value.startsWith("/9j/")) return "image/jpeg";
+  if (value.startsWith("iVBOR")) return "image/png";
+  if (value.startsWith("R0lGOD")) return "image/gif";
+  if (value.startsWith("UklGR")) return "image/webp";
+  return "image/jpeg";
+}
+
+function normalizeScreenshotDataUrl(value, fallbackMimeType = "image/jpeg") {
+  if (!value || typeof value !== "string") return null;
+  if (value.startsWith("data:image/")) return value;
+  return `data:${fallbackMimeType || imageMimeTypeFromBase64(value)};base64,${value}`;
+}
+
+function screenshotRecord(dataUrl, mode) {
+  return dataUrl
+    ? {
+        dataUrl,
+        capturedAt: new Date().toISOString(),
+        mode
+      }
+    : null;
+}
+
+async function fetchRenderedSnapshotViaCloudflare(env, url) {
+  if (!hasBrowserRunCredentials(env)) {
+    return null;
+  }
+
+  const endpoint = `${BROWSER_RUN_ENDPOINT}/${env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/snapshot`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: browserRunHeaders(env),
+    body: JSON.stringify(browserRunPayload(url))
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const text = await response.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+
+  const payload = parsed?.result && typeof parsed.result === "object" ? parsed.result : parsed;
+  const html = payload?.content || payload?.html || payload?.result?.content || "";
+  const screenshotValue = payload?.screenshot || payload?.image || payload?.result?.screenshot || "";
+  const dataUrl = normalizeScreenshotDataUrl(screenshotValue, payload?.mimeType || payload?.contentType || "image/jpeg");
+
+  if (!html && !dataUrl) {
+    return null;
+  }
+
+  return {
+    html: typeof html === "string" ? html : "",
+    screenshot: screenshotRecord(dataUrl, "cloudflare-browser-run-snapshot")
+  };
+}
+
 async function fetchRenderedHtmlViaCloudflare(env, url) {
   if (!hasBrowserRunCredentials(env)) {
     return null;
@@ -16,14 +101,10 @@ async function fetchRenderedHtmlViaCloudflare(env, url) {
   const endpoint = `${BROWSER_RUN_ENDPOINT}/${env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/content`;
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${env.CLOUDFLARE_BROWSER_RENDERING_TOKEN}`
-    },
+    headers: browserRunHeaders(env),
     body: JSON.stringify({
-      url,
-      gotoOptions: { waitUntil: "networkidle2", timeout: 45000 },
-      userAgent: BROWSER_USER_AGENT
+      ...browserRunPayload(url),
+      screenshotOptions: undefined
     })
   });
 
@@ -52,11 +133,10 @@ async function arrayBufferToBase64(buffer) {
 }
 
 function jsonScreenshotToDataUrl(parsed) {
-  const value = parsed?.result || parsed?.screenshot || parsed?.image || parsed?.data;
+  const payload = parsed?.result && typeof parsed.result === "object" ? parsed.result : parsed;
+  const value = payload?.result || payload?.screenshot || payload?.image || payload?.data;
   if (!value || typeof value !== "string") return null;
-  if (value.startsWith("data:image/")) return value;
-  const mimeType = parsed?.mimeType || parsed?.contentType || "image/jpeg";
-  return `data:${mimeType};base64,${value}`;
+  return normalizeScreenshotDataUrl(value, payload?.mimeType || payload?.contentType || imageMimeTypeFromBase64(value));
 }
 
 export async function capturePageScreenshot(env, url) {
@@ -68,21 +148,8 @@ export async function capturePageScreenshot(env, url) {
     const endpoint = `${BROWSER_RUN_ENDPOINT}/${env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/screenshot`;
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.CLOUDFLARE_BROWSER_RENDERING_TOKEN}`
-      },
-      body: JSON.stringify({
-        url,
-        gotoOptions: { waitUntil: "networkidle2", timeout: 45000 },
-        userAgent: BROWSER_USER_AGENT,
-        viewport: { width: 1365, height: 900 },
-        screenshotOptions: {
-          type: "jpeg",
-          quality: 70,
-          fullPage: false
-        }
-      })
+      headers: browserRunHeaders(env),
+      body: JSON.stringify(browserRunPayload(url))
     });
 
     if (!response.ok) {
@@ -92,24 +159,14 @@ export async function capturePageScreenshot(env, url) {
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("image/")) {
       const base64 = await arrayBufferToBase64(await response.arrayBuffer());
-      return {
-        dataUrl: `data:${contentType.split(";")[0]};base64,${base64}`,
-        capturedAt: new Date().toISOString(),
-        mode: "cloudflare-browser-run-screenshot"
-      };
+      return screenshotRecord(`data:${contentType.split(";")[0]};base64,${base64}`, "cloudflare-browser-run-screenshot");
     }
 
     const text = await response.text();
     try {
       const parsed = JSON.parse(text);
       const dataUrl = jsonScreenshotToDataUrl(parsed);
-      return dataUrl
-        ? {
-            dataUrl,
-            capturedAt: new Date().toISOString(),
-            mode: "cloudflare-browser-run-screenshot"
-          }
-        : null;
+      return screenshotRecord(dataUrl, "cloudflare-browser-run-screenshot");
     } catch {
       return null;
     }
@@ -144,7 +201,18 @@ async function fetchStaticHtml(url) {
 }
 
 export async function scrapePage(env, url) {
-  const [renderedHtml, screenshot] = await Promise.all([fetchRenderedHtmlViaCloudflare(env, url), capturePageScreenshot(env, url)]);
+  const snapshot = await fetchRenderedSnapshotViaCloudflare(env, url);
+  let renderedHtml = snapshot?.html || null;
+  let screenshot = snapshot?.screenshot || null;
+
+  if (!renderedHtml) {
+    renderedHtml = await fetchRenderedHtmlViaCloudflare(env, url);
+  }
+
+  if (!screenshot) {
+    screenshot = await capturePageScreenshot(env, url);
+  }
+
   const html = renderedHtml || (await fetchStaticHtml(url));
   if (!html || typeof html !== "string" || html.trim().length < 50) {
     throw new Error("The target URL returned an empty or unreadable HTML response.");
@@ -157,7 +225,7 @@ export async function scrapePage(env, url) {
     url,
     html,
     screenshot,
-    extractionMode: renderedHtml ? "cloudflare-browser-rendering" : "static-fetch-fallback",
+    extractionMode: snapshot?.html ? "cloudflare-browser-snapshot" : renderedHtml ? "cloudflare-browser-rendering" : "static-fetch-fallback",
     ...metadata
   };
 }
