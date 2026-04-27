@@ -316,6 +316,8 @@ function Settings({ report, topic, setTopic, countryCode, setCountryCode, langua
         </p>
       </div>
 
+      <PagePreview screenshot={report?.screenshot} url={report?.url} />
+
       <div className="settings-card">
         <label htmlFor="topic-input">Page topic:</label>
         <input
@@ -360,6 +362,35 @@ function Settings({ report, topic, setTopic, countryCode, setCountryCode, langua
         </button>
       </div>
     </motion.section>
+  );
+}
+
+function PagePreview({ screenshot, url }) {
+  return (
+    <section className="preview-card" aria-labelledby="preview-title">
+      <div className="preview-copy">
+        <p className="eyebrow">
+          <Globe2 size={16} />
+          Rendered page preview
+        </p>
+        <h2 id="preview-title">What the browser saw</h2>
+        <p>
+          {screenshot?.dataUrl
+            ? "Captured from the same rendered browser workflow used to analyse the page."
+            : "Preview unavailable, but the page content was fetched successfully."}
+        </p>
+      </div>
+      <div className={`preview-frame ${screenshot?.dataUrl ? "" : "empty"}`}>
+        {screenshot?.dataUrl ? (
+          <img src={screenshot.dataUrl} alt={`Rendered preview of ${url || "the fetched page"}`} data-testid="img-page-preview" />
+        ) : (
+          <div className="preview-placeholder" data-testid="status-preview-unavailable">
+            <CircleAlert size={22} />
+            <span>Preview unavailable</span>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

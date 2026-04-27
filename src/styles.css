@@ -229,6 +229,7 @@ button {
 .url-panel,
 .process-card,
 .settings-card,
+.preview-card,
 .report-card,
 .score-hero {
   border: 1px solid var(--border);
@@ -559,6 +560,83 @@ input::placeholder {
   border-radius: var(--radius-lg);
 }
 
+.preview-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.28fr);
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 22px;
+  padding: clamp(18px, 3vw, 26px);
+  border-radius: var(--radius-lg);
+}
+
+.preview-copy h2 {
+  margin-bottom: 10px;
+}
+
+.preview-copy p:last-child {
+  margin: 0;
+  color: var(--muted);
+}
+
+.preview-frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-lg) - 6px);
+  background:
+    linear-gradient(var(--surface-strong), var(--surface-strong)) padding-box,
+    linear-gradient(135deg, color-mix(in srgb, var(--primary), transparent 35%), transparent) border-box;
+  box-shadow: var(--shadow-small);
+}
+
+.preview-frame::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 24px;
+  background: color-mix(in srgb, var(--surface-strong), transparent 8%);
+  border-bottom: 1px solid var(--border);
+}
+
+.preview-frame::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  left: 12px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--red);
+  box-shadow:
+    12px 0 0 var(--amber),
+    24px 0 0 var(--green);
+}
+
+.preview-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.preview-frame.empty {
+  display: grid;
+  place-items: center;
+}
+
+.preview-placeholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .inline-selects {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -792,6 +870,7 @@ input::placeholder {
 @media (max-width: 860px) {
   .hero-grid,
   .process-card ol,
+  .preview-card,
   .score-hero {
     grid-template-columns: 1fr;
   }
@@ -833,6 +912,7 @@ input::placeholder {
   .url-panel,
   .process-card,
   .settings-card,
+  .preview-card,
   .report-card,
   .score-hero {
     border-radius: 18px;

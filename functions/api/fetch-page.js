@@ -11,6 +11,7 @@ async function mockFetchPage(env, url) {
   const id = makeId("report");
   const country = detectCountryFromUrl(url);
   const html = `<!doctype html><html lang="en"><head><title>Search intent gaps: demo page</title></head><body><h1>Search intent gaps</h1><main><p>Search intent gaps are missing answers or unexplored subtopics that users expect when they search for a subject. People Also Ask data can reveal follow-up questions that content should address.</p><p>This demo page explains how SEO teams can use content audits, AlsoAsked, and AI classification to find unanswered questions at scale.</p></main></body></html>`;
+  const mockScreenshotSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1365" height="900" viewBox="0 0 1365 900"><rect width="1365" height="900" fill="#f7f6f2"/><rect x="96" y="82" width="1173" height="104" rx="26" fill="#01696f" opacity=".13"/><rect x="126" y="228" width="720" height="56" rx="14" fill="#211f1a" opacity=".86"/><rect x="126" y="314" width="1010" height="24" rx="12" fill="#716f67" opacity=".45"/><rect x="126" y="364" width="930" height="24" rx="12" fill="#716f67" opacity=".35"/><rect x="126" y="444" width="1113" height="250" rx="24" fill="#fff" stroke="#d4d1ca"/><text x="126" y="770" font-family="Arial" font-size="32" fill="#01696f" font-weight="700">Rendered preview unavailable in mock mode</text></svg>`;
   const record = {
     id,
     url,
@@ -22,6 +23,11 @@ async function mockFetchPage(env, url) {
     languageCode: "en",
     mainContent:
       "Search intent gaps are missing answers or unexplored subtopics that users expect when they search for a subject. People Also Ask data can reveal follow-up questions that content should address. SEO teams can use content audits, AlsoAsked, and AI classification to find unanswered questions at scale.",
+    screenshot: {
+      dataUrl: `data:image/svg+xml;base64,${btoa(mockScreenshotSvg)}`,
+      capturedAt: new Date().toISOString(),
+      mode: "mock-preview"
+    },
     extractionMode: "mock-mode",
     createdAt: new Date().toISOString()
   };
@@ -51,6 +57,7 @@ export async function onRequestPost({ request, env }) {
         topic: record.topic,
         countryCode: record.countryCode,
         languageCode: record.languageCode,
+        screenshot: record.screenshot,
         extractionMode: record.extractionMode,
         languages
       });
@@ -75,6 +82,7 @@ export async function onRequestPost({ request, env }) {
       countryCode: country.code,
       languageCode,
       mainContent,
+      screenshot: scraped.screenshot,
       extractionMode: scraped.extractionMode,
       createdAt: new Date().toISOString()
     };
@@ -89,6 +97,7 @@ export async function onRequestPost({ request, env }) {
       topic,
       countryCode: country.code,
       languageCode,
+      screenshot: scraped.screenshot,
       extractionMode: scraped.extractionMode,
       languages
     });
