@@ -10,6 +10,7 @@ import {
   FileSearch,
   Gauge,
   Globe2,
+  Linkedin,
   Loader2,
   Moon,
   RefreshCcw,
@@ -255,20 +256,32 @@ function Home({ url, setUrl, fetchPage, error, turnstileToken, setTurnstileToken
             API
           </p>
         </div>
-        <aside className="insight-card" aria-label="Did you know">
-          <p className="insight-label">Did you know</p>
-          <p>
-            Answering more People Also Ask questions related to your topic is correlated to{" "}
-            <a href="https://alsoasked.com/insights/paa-ranking-correlation" target="_blank" rel="noreferrer">
-              ranking better in Google
-            </a>
-            ? You can{" "}
-            <a href="https://searchengineland.com/improving-content-quality-scale-ai-442546" target="_blank" rel="noreferrer">
-              do this process at scale
-            </a>{" "}
-            with Screaming Frog, AlsoAsked and ChatGPT.
-          </p>
-        </aside>
+        <div className="insight-stack">
+          <aside className="insight-card" aria-label="Did you know">
+            <p className="insight-label">Did you know</p>
+            <p>
+              Answering more People Also Ask questions related to your topic is correlated to{" "}
+              <a href="https://alsoasked.com/insights/paa-ranking-correlation" target="_blank" rel="noreferrer">
+                ranking better in Google
+              </a>
+              ? You can{" "}
+              <a href="https://searchengineland.com/improving-content-quality-scale-ai-442546" target="_blank" rel="noreferrer">
+                do this process at scale
+              </a>{" "}
+              with Screaming Frog, AlsoAsked and ChatGPT.
+            </p>
+          </aside>
+          <aside className="insight-card" aria-label="Did you know">
+            <p className="insight-label">Did you know</p>
+            <p>
+              You can join 13,000+ other SEOs and get SEO tools, tips, and news every Monday for free in the the{" "}
+              <a href="https://coreupdates.com/" target="_blank" rel="noreferrer">
+                CoreUpdates.com newsletter
+              </a>
+              .
+            </p>
+          </aside>
+        </div>
       </div>
 
       <form className="url-panel" onSubmit={fetchPage}>
@@ -661,18 +674,53 @@ function Logo() {
   );
 }
 
+function BlueSkyIcon({ size = 14 }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 600 530"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M135.7 44.4C202 94 273.3 194.6 299.5 248.5 325.7 194.6 397 94 463.3 44.4 511 8.7 588.3-19 588.3 69.2c0 17.6-10.1 147.9-16 169.1-20.6 73.6-95.6 92.3-162.4 81 116.7 19.9 146.4 85.7 82.3 151.5-121.7 124.9-174.9-31.3-188.5-71.3-2.5-7.4-3.7-10.8-3.7-7.9 0-2.9-1.2.5-3.7 7.9-13.6 40-66.8 196.2-188.5 71.3-64.1-65.8-34.4-131.6 82.3-151.5-66.8 11.3-141.8-7.4-162.4-81-5.9-21.2-16-151.5-16-169.1C11.7-19 89-8.7 135.7 44.4z" />
+    </svg>
+  );
+}
+
 function Footer() {
   return (
     <footer className="site-footer">
       <p>
         <a href="https://intentgaps.com">IntentGaps.com</a> by{" "}
-        <a href="https://www.linkedin.com/in/markseo/" target="_blank" rel="noreferrer">
-          Mark Williams-Cook
-        </a>{" "}
-        of{" "}
-        <a href="https://withcandour.co.uk" target="_blank" rel="noreferrer">
+        <a href="https://withcandour.co.uk" target="_blank" rel="noopener noreferrer">
           Candour
         </a>
+        's Mark Williams-Cook
+        <span className="footer-socials">
+          <a
+            href="https://www.linkedin.com/in/markseo/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer-social"
+            aria-label="Mark Williams-Cook on LinkedIn"
+          >
+            <Linkedin size={14} aria-hidden="true" />
+            <span>LinkedIn</span>
+          </a>
+          <a
+            href="https://bsky.app/profile/markwilliamscook.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer-social"
+            aria-label="Mark Williams-Cook on BlueSky"
+          >
+            <BlueSkyIcon size={14} />
+            <span>BlueSky</span>
+          </a>
+        </span>
       </p>
     </footer>
   );

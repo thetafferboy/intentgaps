@@ -279,6 +279,12 @@ h2 {
   font-size: clamp(1.05rem, 1.5vw, 1.25rem);
 }
 
+.insight-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .insight-card {
   display: flex;
   flex-direction: column;
@@ -900,6 +906,23 @@ input::placeholder {
 
 .site-footer p {
   margin: 0;
+}
+
+.footer-socials {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 10px;
+}
+
+.footer-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-social svg {
+  flex-shrink: 0;
 }
 
 @keyframes rotate {
