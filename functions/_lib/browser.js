@@ -25,8 +25,7 @@ function browserRunPayload(url) {
     screenshotOptions: {
       type: "jpeg",
       quality: 70,
-      fullPage: false,
-      encoding: "base64"
+      fullPage: false
     }
   };
 }
