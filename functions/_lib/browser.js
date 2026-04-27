@@ -18,7 +18,8 @@ function browserRunHeaders(env) {
 function browserRunPayload(url) {
   return {
     url,
-    gotoOptions: { waitUntil: "networkidle2", timeout: 4500 },
+    gotoOptions: { waitUntil: "domcontentloaded", timeout: 4500 },
+    waitForTimeout: 1200,
     userAgent: BROWSER_USER_AGENT,
     viewport: { width: 1365, height: 900, deviceScaleFactor: 1 },
     screenshotOptions: {
@@ -109,8 +110,7 @@ async function fetchRenderedHtmlViaCloudflare(env, url) {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Cloudflare Browser Rendering could not render the page (${response.status}). ${text.slice(0, 500)}`);
+    return null;
   }
 
   const text = await response.text();
@@ -201,19 +201,43 @@ async function fetchStaticHtml(url) {
 }
 
 export async function scrapePage(env, url) {
-  const snapshot = await fetchRenderedSnapshotViaCloudflare(env, url);
+  const failures = [];
+
+  let snapshot = null;
+  try {
+    snapshot = await fetchRenderedSnapshotViaCloudflare(env, url);
+  } catch (error) {
+    failures.push(`snapshot failed: ${error.message || "unknown error"}`);
+  }
+
   let renderedHtml = snapshot?.html || null;
   let screenshot = snapshot?.screenshot || null;
 
   if (!renderedHtml) {
-    renderedHtml = await fetchRenderedHtmlViaCloudflare(env, url);
+    try {
+      renderedHtml = await fetchRenderedHtmlViaCloudflare(env, url);
+    } catch (error) {
+      failures.push(`rendered HTML failed: ${error.message || "unknown error"}`);
+    }
   }
 
   if (!screenshot) {
-    screenshot = await capturePageScreenshot(env, url);
+    try {
+      screenshot = await capturePageScreenshot(env, url);
+    } catch (error) {
+      failures.push(`screenshot failed: ${error.message || "unknown error"}`);
+    }
   }
 
-  const html = renderedHtml || (await fetchStaticHtml(url));
+  let html = renderedHtml;
+  if (!html) {
+    try {
+      html = await fetchStaticHtml(url);
+    } catch (error) {
+      failures.push(`static fetch failed: ${error.message || "unknown error"}`);
+      throw new Error(failures.join(" | ") || "No fetch method could retrieve the page.");
+    }
+  }
   if (!html || typeof html !== "string" || html.trim().length < 50) {
     throw new Error("The target URL returned an empty or unreadable HTML response.");
   }

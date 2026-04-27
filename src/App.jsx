@@ -93,7 +93,8 @@ function App() {
     });
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.error || "Something went wrong.");
+      const detail = data.details ? ` ${data.details}` : "";
+      throw new Error(`${data.error || "Something went wrong."}${detail}`);
     }
     return data;
   }
