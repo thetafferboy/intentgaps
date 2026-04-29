@@ -20,12 +20,17 @@ export async function onRequestPost({ request, env }) {
   const record = await kvGet(env, `report:${body.id}`);
   if (!record) return badRequest("Report not found. Please fetch the page again.");
 
-  const candidateQuestions = Array.isArray(record.relevantQuestions) ? record.relevantQuestions : [];
-  const allowed = new Set(candidateQuestions);
+  const questionPool = Array.isArray(record.questions) && record.questions.length
+    ? record.questions.map((item) => (typeof item === "string" ? item : item?.question)).filter(Boolean)
+    : Array.isArray(record.relevantQuestions)
+      ? record.relevantQuestions
+      : [];
+  const allowed = new Set(questionPool);
+  const defaultIncluded = Array.isArray(record.relevantQuestions) ? record.relevantQuestions : questionPool;
 
   const requestedQuestions = Array.isArray(body.questions)
     ? body.questions.map((question) => String(question || "")).filter((question) => allowed.has(question))
-    : candidateQuestions;
+    : defaultIncluded;
 
   if (!requestedQuestions.length) {
     return badRequest("Please include at least one question to score.", {

@@ -1,7 +1,19 @@
 import { fetchAlsoAsked } from "../_lib/alsoasked.js";
 import { badRequest, isMock, json, kvGet, kvPut, readJson, serverError } from "../_lib/http.js";
 import { mockQuestions } from "../_lib/mock.js";
-import { filterRelevantQuestions, generateFallbackQuestions } from "../_lib/openai.js";
+import { classifyQuestionRelevance, generateFallbackQuestions } from "../_lib/openai.js";
+
+function buildQuestionObjects(questions, relevantSet) {
+  return questions.map((question) => {
+    const relevant = relevantSet.has(question);
+    return {
+      question,
+      relevant,
+      recommended: relevant,
+      included: relevant
+    };
+  });
+}
 
 export async function onRequestPost({ request, env }) {
   const body = await readJson(request);
@@ -17,7 +29,8 @@ export async function onRequestPost({ request, env }) {
 
   try {
     let alsoAsked;
-    let relevantQuestions;
+    let allQuestions;
+    let questionItems;
     let questionSource = "alsoasked";
     let sourceNotice = "";
 
@@ -26,15 +39,18 @@ export async function onRequestPost({ request, env }) {
         raw: { mock: true, queries: [{ term: topic, results: mockQuestions.map((question) => ({ question, results: [] })) }] },
         questions: mockQuestions
       };
-      relevantQuestions = mockQuestions.slice(0, 5);
+      allQuestions = mockQuestions;
+      const relevantSet = new Set(mockQuestions.slice(0, 5));
+      questionItems = buildQuestionObjects(allQuestions, relevantSet);
     } else {
       alsoAsked = await fetchAlsoAsked(env, topic, countryCode, languageCode);
+
       if (!alsoAsked.questions.length) {
-        relevantQuestions = await generateFallbackQuestions(env, topic);
+        const fallback = await generateFallbackQuestions(env, topic);
         questionSource = "genai_fallback";
         sourceNotice = "No Google PAA questions for this topic, used GenAI as a fallback";
 
-        if (!relevantQuestions.length) {
+        if (!fallback.length) {
           return badRequest(
             `AlsoAsked did not return any questions for "${topic}", and the GenAI fallback could not produce questions. Please try manually redefining the page topic above, then run the search again.`,
             {
@@ -45,22 +61,19 @@ export async function onRequestPost({ request, env }) {
             }
           );
         }
+
+        allQuestions = fallback;
+        // GenAI fallback questions are generated specifically from the topic,
+        // so treat them all as relevant/recommended/included by default.
+        questionItems = buildQuestionObjects(allQuestions, new Set(allQuestions));
       } else {
-        relevantQuestions = await filterRelevantQuestions(env, record.mainContent, alsoAsked.questions);
-        if (!relevantQuestions.length) {
-          return badRequest(
-            `AlsoAsked returned questions for "${topic}", but none looked directly relevant to this page content. Please try manually redefining the page topic above, then run the search again.`,
-            {
-              reason: "no_relevant_questions",
-              topic,
-              countryCode,
-              languageCode,
-              allQuestionCount: alsoAsked.questions.length
-            }
-          );
-        }
+        allQuestions = alsoAsked.questions;
+        const relevantSet = await classifyQuestionRelevance(env, record.mainContent, allQuestions);
+        questionItems = buildQuestionObjects(allQuestions, relevantSet);
       }
     }
+
+    const relevantQuestions = questionItems.filter((item) => item.relevant).map((item) => item.question);
 
     const updatedRecord = {
       ...record,
@@ -69,6 +82,7 @@ export async function onRequestPost({ request, env }) {
       languageCode,
       alsoAskedRaw: alsoAsked.raw,
       alsoAskedQuestions: alsoAsked.questions,
+      questions: questionItems,
       relevantQuestions,
       questionSource,
       sourceNotice,
@@ -84,8 +98,10 @@ export async function onRequestPost({ request, env }) {
       countryCode,
       languageCode,
       extractionMode: record.extractionMode,
+      questions: questionItems,
       relevantQuestions,
-      questionCount: relevantQuestions.length,
+      questionCount: questionItems.length,
+      relevantQuestionCount: relevantQuestions.length,
       allQuestionCount: alsoAsked.questions.length,
       questionSource,
       sourceNotice

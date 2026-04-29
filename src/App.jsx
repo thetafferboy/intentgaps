@@ -368,9 +368,9 @@ function App() {
         countryCode,
         languageCode
       });
-      const list = Array.isArray(data.relevantQuestions) ? data.relevantQuestions : [];
-      const included = Object.fromEntries(list.map((question) => [question, true]));
-      setQuestions(data);
+      const items = normalizeQuestionItems(data);
+      const included = Object.fromEntries(items.map((item) => [item.question, item.included]));
+      setQuestions({ ...data, items });
       setIncludedQuestions(included);
       setStep("review");
     } catch (err) {
@@ -388,7 +388,10 @@ function App() {
 
   async function scoreSelected() {
     if (!report?.id || !questions) return;
-    const selected = (questions.relevantQuestions || []).filter((question) => includedQuestions[question]);
+    const items = questions.items || normalizeQuestionItems(questions);
+    const selected = items
+      .map((item) => item.question)
+      .filter((question) => includedQuestions[question]);
     if (!selected.length) {
       setError("Please include at least one question to score.");
       return;
@@ -472,7 +475,7 @@ function App() {
               error={error}
             />
           )}
-          {step === "finding" && <LoadingPage key="finding" label="Finding content gaps" detail="Getting AlsoAsked questions and filtering them for relevance to your page." />}
+          {step === "finding" && <LoadingPage key="finding" label="Finding closest proximity questions" detail="Getting AlsoAsked questions and assessing each one for relevance to your page." />}
           {step === "review" && (
             <ReviewQuestions
               key="review"
@@ -491,6 +494,28 @@ function App() {
       <Footer />
     </div>
   );
+}
+
+function normalizeQuestionItems(data) {
+  if (Array.isArray(data?.questions) && data.questions.length) {
+    return data.questions
+      .map((item) => {
+        if (!item) return null;
+        if (typeof item === "string") {
+          return { question: item, relevant: true, recommended: true, included: true };
+        }
+        const question = String(item.question || "").trim();
+        if (!question) return null;
+        const relevant = Boolean(item.relevant);
+        const recommended = item.recommended === undefined ? relevant : Boolean(item.recommended);
+        const included = item.included === undefined ? relevant : Boolean(item.included);
+        return { question, relevant, recommended, included };
+      })
+      .filter(Boolean);
+  }
+  // Backward-compatibility: older API responses returned only a string array.
+  const list = Array.isArray(data?.relevantQuestions) ? data.relevantQuestions : [];
+  return list.map((question) => ({ question, relevant: true, recommended: true, included: true }));
 }
 
 function normalizeUrlForComparison(value) {
@@ -823,8 +848,8 @@ function SelectBox({ id, label, value, onChange, options, testId }) {
 }
 
 function ReviewQuestions({ questions, includedQuestions, toggleQuestion, scoreSelected, error }) {
-  const list = questions?.relevantQuestions || [];
-  const selectedCount = list.filter((question) => includedQuestions[question]).length;
+  const items = questions?.items || normalizeQuestionItems(questions);
+  const selectedCount = items.filter((item) => includedQuestions[item.question]).length;
 
   return (
     <motion.section
@@ -854,11 +879,11 @@ function ReviewQuestions({ questions, includedQuestions, toggleQuestion, scoreSe
       ) : null}
 
       <ul className="review-question-list" role="list">
-        {list.map((question, index) => {
-          const included = Boolean(includedQuestions[question]);
+        {items.map((item, index) => {
+          const included = Boolean(includedQuestions[item.question]);
           return (
             <motion.li
-              key={question}
+              key={item.question}
               className="review-question-item"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -868,15 +893,16 @@ function ReviewQuestions({ questions, includedQuestions, toggleQuestion, scoreSe
                 type="button"
                 role="switch"
                 aria-pressed={included}
-                aria-label={`${included ? "Exclude" : "Include"} question: ${question}`}
+                aria-label={`${included ? "Exclude" : "Include"} question: ${item.question}`}
                 className={`review-question-box ${included ? "included" : "excluded"}`}
                 data-testid={`button-review-question-${index}`}
-                onClick={() => toggleQuestion(question)}
+                data-relevant={item.relevant ? "true" : "false"}
+                onClick={() => toggleQuestion(item.question)}
               >
                 <span className="review-question-icon" aria-hidden="true">
                   {included ? "✅" : "❌"}
                 </span>
-                <span className="review-question-text">{question}</span>
+                <span className="review-question-text">{item.question}</span>
               </button>
             </motion.li>
           );
@@ -891,7 +917,7 @@ function ReviewQuestions({ questions, includedQuestions, toggleQuestion, scoreSe
 
       <div className="review-actions">
         <p className="review-count" data-testid="text-review-count">
-          {selectedCount} of {list.length} included
+          {selectedCount} of {items.length} included
         </p>
         <button
           className="primary-button"
