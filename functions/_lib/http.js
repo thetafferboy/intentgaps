@@ -56,7 +56,12 @@ export function makeId(prefix = "ig") {
   return `${prefix}_${token}`;
 }
 
-export async function kvPut(env, key, value, ttlSeconds = 60 * 60 * 24) {
+// Default TTL is short because each KV record is transient: it only
+// needs to survive long enough for one user to walk through the
+// fetch → review → find-questions → score flow. Records are deleted
+// immediately after scorecard generation, so the TTL is just a safety
+// net for sessions the user abandons partway through.
+export async function kvPut(env, key, value, ttlSeconds = 60 * 60) {
   if (env.INTENTGAPS_KV) {
     await env.INTENTGAPS_KV.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
   }
@@ -66,6 +71,11 @@ export async function kvGet(env, key) {
   if (!env.INTENTGAPS_KV) return null;
   const value = await env.INTENTGAPS_KV.get(key, "json");
   return value || null;
+}
+
+export async function kvDelete(env, key) {
+  if (!env.INTENTGAPS_KV) return;
+  await env.INTENTGAPS_KV.delete(key);
 }
 
 export function isMock(env) {
