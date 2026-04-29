@@ -1,4 +1,4 @@
-import { badRequest, isMock, json, kvGet, kvPut, readJson, serverError } from "../_lib/http.js";
+import { badRequest, isMock, json, kvDelete, kvGet, readJson, serverError } from "../_lib/http.js";
 import { mockScores } from "../_lib/mock.js";
 import { scoreQuestions } from "../_lib/openai.js";
 
@@ -45,17 +45,7 @@ export async function onRequestPost({ request, env }) {
 
     const totals = calculateScore(answers);
 
-    const updatedRecord = {
-      ...record,
-      includedQuestions: requestedQuestions,
-      answers,
-      ...totals,
-      analysedAt: new Date().toISOString()
-    };
-
-    await kvPut(env, `report:${record.id}`, updatedRecord);
-
-    return json({
+    const responseBody = {
       id: record.id,
       url: record.url,
       topic: record.topic,
@@ -68,7 +58,20 @@ export async function onRequestPost({ request, env }) {
       sourceNotice: record.sourceNotice,
       answers,
       ...totals
-    });
+    };
+
+    // Scorecard is fully built and returned to the client. The KV
+    // record holds the bulky DOM, screenshot, AlsoAsked payload, and
+    // intermediate question lists, none of which the frontend needs
+    // after this point. Delete best-effort; never fail the scorecard
+    // because cleanup failed.
+    try {
+      await kvDelete(env, `report:${record.id}`);
+    } catch (cleanupError) {
+      console.warn("kv cleanup failed for report", record.id, cleanupError?.message);
+    }
+
+    return json(responseBody);
   } catch (error) {
     return serverError("Could not score questions.", error.message);
   }
