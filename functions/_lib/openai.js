@@ -70,7 +70,8 @@ export async function detectLanguage(env, mainContent, fallback) {
   return normalizeLanguageCode(content || fallback);
 }
 
-export async function filterRelevantQuestions(env, mainContent, questions) {
+export async function classifyQuestionRelevance(env, mainContent, questions) {
+  if (!Array.isArray(questions) || !questions.length) return new Set();
   const content = mainContent.slice(0, 26000);
   const payload = { questions };
   const raw = await callOpenAI(
@@ -79,18 +80,26 @@ export async function filterRelevantQuestions(env, mainContent, questions) {
       {
         role: "system",
         content:
-          "You are an SEO content analyst. Decide whether each People Also Ask question is directly related to the topic of the supplied content. Return strict JSON only."
+          "You are an SEO content analyst. For each People Also Ask question, decide whether it is directly related to the topic of the supplied content. Return strict JSON only."
       },
       {
         role: "user",
-        content: `Content:\n${content}\n\nQuestions JSON:\n${JSON.stringify(payload)}\n\nReturn JSON in this shape: {"relevant":["question text", "..."]}. Include only directly relevant questions.`
+        content: `Content:\n${content}\n\nQuestions JSON:\n${JSON.stringify(payload)}\n\nReturn JSON in this shape: {"relevant":["question text", "..."]}. Include only directly relevant questions; omit questions that are not directly relevant.`
       }
     ],
     { json: true }
   );
-  const parsed = JSON.parse(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return new Set();
+  }
   const allowed = new Set(questions);
-  return Array.isArray(parsed.relevant) ? parsed.relevant.filter((question) => allowed.has(question)) : [];
+  const relevant = Array.isArray(parsed.relevant)
+    ? parsed.relevant.filter((question) => allowed.has(question))
+    : [];
+  return new Set(relevant);
 }
 
 export async function generateFallbackQuestions(env, topic) {
