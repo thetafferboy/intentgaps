@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [[kv_namespaces]]
 binding = "INTENTGAPS_KV"
-id = "516fa3c94bb4438185f07d566221df6d"
+id = "3c4728fe35b24bec8290cd0b089beeba"
 # preview_id = "replace_with_preview_kv_namespace_id"
 
 [vars]
