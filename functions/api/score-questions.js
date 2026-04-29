@@ -1,0 +1,70 @@
+import { badRequest, isMock, json, kvGet, kvPut, readJson, serverError } from "../_lib/http.js";
+import { mockScores } from "../_lib/mock.js";
+import { scoreQuestions } from "../_lib/openai.js";
+
+function calculateScore(answers) {
+  const maxScore = answers.length * 3;
+  const score = answers.reduce((total, answer) => {
+    if (answer.status === "full") return total + 3;
+    if (answer.status === "partial") return total + 1;
+    return total;
+  }, 0);
+  const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  return { score, maxScore, percentage };
+}
+
+export async function onRequestPost({ request, env }) {
+  const body = await readJson(request);
+  if (!body?.id) return badRequest("Missing report id.");
+
+  const record = await kvGet(env, `report:${body.id}`);
+  if (!record) return badRequest("Report not found. Please fetch the page again.");
+
+  const candidateQuestions = Array.isArray(record.relevantQuestions) ? record.relevantQuestions : [];
+  const allowed = new Set(candidateQuestions);
+
+  const requestedQuestions = Array.isArray(body.questions)
+    ? body.questions.map((question) => String(question || "")).filter((question) => allowed.has(question))
+    : candidateQuestions;
+
+  if (!requestedQuestions.length) {
+    return badRequest("Please include at least one question to score.", {
+      reason: "no_included_questions"
+    });
+  }
+
+  try {
+    const answers = isMock(env)
+      ? mockScores(requestedQuestions)
+      : await scoreQuestions(env, record.mainContent, requestedQuestions);
+
+    const totals = calculateScore(answers);
+
+    const updatedRecord = {
+      ...record,
+      includedQuestions: requestedQuestions,
+      answers,
+      ...totals,
+      analysedAt: new Date().toISOString()
+    };
+
+    await kvPut(env, `report:${record.id}`, updatedRecord);
+
+    return json({
+      id: record.id,
+      url: record.url,
+      topic: record.topic,
+      countryCode: record.countryCode,
+      languageCode: record.languageCode,
+      extractionMode: record.extractionMode,
+      questionCount: requestedQuestions.length,
+      allQuestionCount: Array.isArray(record.alsoAskedQuestions) ? record.alsoAskedQuestions.length : 0,
+      questionSource: record.questionSource,
+      sourceNotice: record.sourceNotice,
+      answers,
+      ...totals
+    });
+  } catch (error) {
+    return serverError("Could not score questions.", error.message);
+  }
+}

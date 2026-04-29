@@ -6,6 +6,7 @@ import {
   ChevronDown,
   CircleAlert,
   CircleDashed,
+  ClipboardCheck,
   ExternalLink,
   FileSearch,
   Gauge,
@@ -296,6 +297,8 @@ function App() {
   const [topic, setTopic] = useState("");
   const [countryCode, setCountryCode] = useState("us");
   const [languageCode, setLanguageCode] = useState("en");
+  const [questions, setQuestions] = useState(null);
+  const [includedQuestions, setIncludedQuestions] = useState({});
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
@@ -354,22 +357,54 @@ function App() {
     }
   }
 
-  async function analyze() {
+  async function findQuestions() {
     if (!report?.id) return;
     setError("");
     setStep("finding");
     try {
-      const data = await postJson("/api/analyze", {
+      const data = await postJson("/api/find-questions", {
         id: report.id,
         topic,
         countryCode,
         languageCode
       });
+      const list = Array.isArray(data.relevantQuestions) ? data.relevantQuestions : [];
+      const included = Object.fromEntries(list.map((question) => [question, true]));
+      setQuestions(data);
+      setIncludedQuestions(included);
+      setStep("review");
+    } catch (err) {
+      setError(err.message);
+      setStep("settings");
+    }
+  }
+
+  function toggleQuestion(question) {
+    setIncludedQuestions((current) => ({
+      ...current,
+      [question]: !current[question]
+    }));
+  }
+
+  async function scoreSelected() {
+    if (!report?.id || !questions) return;
+    const selected = (questions.relevantQuestions || []).filter((question) => includedQuestions[question]);
+    if (!selected.length) {
+      setError("Please include at least one question to score.");
+      return;
+    }
+    setError("");
+    setStep("scoring");
+    try {
+      const data = await postJson("/api/score-questions", {
+        id: report.id,
+        questions: selected
+      });
       setResult(data);
       setStep("scorecard");
     } catch (err) {
       setError(err.message);
-      setStep("settings");
+      setStep("review");
     }
   }
 
@@ -380,6 +415,8 @@ function App() {
     setTopic("");
     setCountryCode("us");
     setLanguageCode("en");
+    setQuestions(null);
+    setIncludedQuestions({});
     setResult(null);
     setError("");
     setTurnstileToken("");
@@ -431,11 +468,22 @@ function App() {
               setCountryCode={setCountryCode}
               languageCode={languageCode}
               setLanguageCode={setLanguageCode}
-              analyze={analyze}
+              analyze={findQuestions}
               error={error}
             />
           )}
-          {step === "finding" && <LoadingPage key="finding" label="Finding content gaps" detail="Getting AlsoAsked questions, filtering relevance, and scoring how well the page answers them." />}
+          {step === "finding" && <LoadingPage key="finding" label="Finding content gaps" detail="Getting AlsoAsked questions and filtering them for relevance to your page." />}
+          {step === "review" && (
+            <ReviewQuestions
+              key="review"
+              questions={questions}
+              includedQuestions={includedQuestions}
+              toggleQuestion={toggleQuestion}
+              scoreSelected={scoreSelected}
+              error={error}
+            />
+          )}
+          {step === "scoring" && <LoadingPage key="scoring" label="Scoring content" detail="Evaluating how well the page answers each included question." />}
           {step === "scorecard" && <Scorecard key="scorecard" result={result} reset={reset} />}
         </AnimatePresence>
       </main>
@@ -771,6 +819,92 @@ function SelectBox({ id, label, value, onChange, options, testId }) {
         <ChevronDown size={18} aria-hidden="true" />
       </div>
     </div>
+  );
+}
+
+function ReviewQuestions({ questions, includedQuestions, toggleQuestion, scoreSelected, error }) {
+  const list = questions?.relevantQuestions || [];
+  const selectedCount = list.filter((question) => includedQuestions[question]).length;
+
+  return (
+    <motion.section
+      className="review-page"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <div className="section-heading">
+        <p className="eyebrow">
+          <ClipboardCheck size={16} />
+          Review questions
+        </p>
+        <h1 data-testid="text-review-title">Questions we found:</h1>
+        <p className="review-subtext" data-testid="text-review-subtext">
+          Recommended questions selected, feel free to add or remove
+        </p>
+      </div>
+
+      {questions?.sourceNotice ? (
+        <div className="fallback-notice" role="status" data-testid="notice-question-source-review">
+          <Sparkles size={18} />
+          <p>{questions.sourceNotice}</p>
+        </div>
+      ) : null}
+
+      <ul className="review-question-list" role="list">
+        {list.map((question, index) => {
+          const included = Boolean(includedQuestions[question]);
+          return (
+            <motion.li
+              key={question}
+              className="review-question-item"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <button
+                type="button"
+                role="switch"
+                aria-pressed={included}
+                aria-label={`${included ? "Exclude" : "Include"} question: ${question}`}
+                className={`review-question-box ${included ? "included" : "excluded"}`}
+                data-testid={`button-review-question-${index}`}
+                onClick={() => toggleQuestion(question)}
+              >
+                <span className="review-question-icon" aria-hidden="true">
+                  {included ? "✅" : "❌"}
+                </span>
+                <span className="review-question-text">{question}</span>
+              </button>
+            </motion.li>
+          );
+        })}
+      </ul>
+
+      {error ? (
+        <p className="error-message" role="alert" data-testid="status-review-error">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="review-actions">
+        <p className="review-count" data-testid="text-review-count">
+          {selectedCount} of {list.length} included
+        </p>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={scoreSelected}
+          disabled={selectedCount === 0}
+          aria-disabled={selectedCount === 0}
+          data-testid="button-score-content"
+        >
+          Score content <ArrowRight size={18} />
+        </button>
+      </div>
+    </motion.section>
   );
 }
 

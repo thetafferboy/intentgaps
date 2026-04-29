@@ -1,18 +1,7 @@
 import { fetchAlsoAsked } from "../_lib/alsoasked.js";
 import { badRequest, isMock, json, kvGet, kvPut, readJson, serverError } from "../_lib/http.js";
-import { mockQuestions, mockScores } from "../_lib/mock.js";
-import { filterRelevantQuestions, generateFallbackQuestions, scoreQuestions } from "../_lib/openai.js";
-
-function calculateScore(answers) {
-  const maxScore = answers.length * 3;
-  const score = answers.reduce((total, answer) => {
-    if (answer.status === "full") return total + 3;
-    if (answer.status === "partial") return total + 1;
-    return total;
-  }, 0);
-  const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-  return { score, maxScore, percentage };
-}
+import { mockQuestions } from "../_lib/mock.js";
+import { filterRelevantQuestions, generateFallbackQuestions } from "../_lib/openai.js";
 
 export async function onRequestPost({ request, env }) {
   const body = await readJson(request);
@@ -29,7 +18,6 @@ export async function onRequestPost({ request, env }) {
   try {
     let alsoAsked;
     let relevantQuestions;
-    let answers;
     let questionSource = "alsoasked";
     let sourceNotice = "";
 
@@ -39,7 +27,6 @@ export async function onRequestPost({ request, env }) {
         questions: mockQuestions
       };
       relevantQuestions = mockQuestions.slice(0, 5);
-      answers = mockScores(relevantQuestions);
     } else {
       alsoAsked = await fetchAlsoAsked(env, topic, countryCode, languageCode);
       if (!alsoAsked.questions.length) {
@@ -73,11 +60,9 @@ export async function onRequestPost({ request, env }) {
           );
         }
       }
-      answers = await scoreQuestions(env, record.mainContent, relevantQuestions);
     }
 
-    const totals = calculateScore(answers);
-    const result = {
+    const updatedRecord = {
       ...record,
       topic,
       countryCode,
@@ -87,12 +72,10 @@ export async function onRequestPost({ request, env }) {
       relevantQuestions,
       questionSource,
       sourceNotice,
-      answers,
-      ...totals,
-      analysedAt: new Date().toISOString()
+      questionsFoundAt: new Date().toISOString()
     };
 
-    await kvPut(env, `report:${record.id}`, result);
+    await kvPut(env, `report:${record.id}`, updatedRecord);
 
     return json({
       id: record.id,
@@ -101,12 +84,11 @@ export async function onRequestPost({ request, env }) {
       countryCode,
       languageCode,
       extractionMode: record.extractionMode,
+      relevantQuestions,
       questionCount: relevantQuestions.length,
       allQuestionCount: alsoAsked.questions.length,
       questionSource,
-      sourceNotice,
-      answers,
-      ...totals
+      sourceNotice
     });
   } catch (error) {
     return serverError("Could not find intent gaps.", error.message);

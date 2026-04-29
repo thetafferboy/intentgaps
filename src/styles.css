@@ -587,9 +587,117 @@ input::placeholder {
 }
 
 .settings-page,
+.review-page,
 .scorecard-page {
   max-width: 900px;
   margin-inline: auto;
+}
+
+.review-subtext {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.review-question-list {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.review-question-item {
+  display: block;
+}
+
+.review-question-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text);
+  text-align: left;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out),
+    background 220ms var(--ease-out),
+    border-color 220ms var(--ease-out),
+    color 220ms var(--ease-out);
+}
+
+.review-question-box:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-small);
+}
+
+.review-question-box.included {
+  background: var(--green-soft);
+  border-color: color-mix(in srgb, var(--green), transparent 55%);
+  color: var(--green);
+}
+
+.review-question-box.excluded {
+  background: var(--red-soft);
+  border-color: color-mix(in srgb, var(--red), transparent 55%);
+  color: var(--red);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--red), transparent 50%);
+}
+
+.review-question-icon {
+  flex: 0 0 auto;
+  font-size: 22px;
+  line-height: 1;
+  filter: saturate(1.1);
+  transition: transform 220ms var(--ease-out);
+}
+
+.review-question-box:hover .review-question-icon {
+  transform: scale(1.1);
+}
+
+.review-question-text {
+  flex: 1 1 auto;
+  color: var(--text);
+}
+
+.review-question-box.excluded .review-question-text {
+  color: var(--muted);
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.review-count {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .review-question-box {
+    padding: 14px 14px;
+  }
+
+  .review-actions {
+    justify-content: stretch;
+  }
+
+  .review-actions .primary-button {
+    width: 100%;
+  }
 }
 
 .section-heading {
