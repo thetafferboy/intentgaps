@@ -4,18 +4,19 @@
   --surface: #fbfaf7;
   --surface-strong: #ffffff;
   --surface-offset: #ebe7df;
-  --text: #211f1a;
-  --muted: #716f67;
-  --faint: #a09c92;
-  --border: rgba(40, 37, 29, 0.13);
-  --primary: #01696f;
+  --text: #1c1a15;
+  --muted: #585649;
+  --faint: #726e60;
+  --border: rgba(40, 37, 29, 0.22);
+  --border-strong: rgba(40, 37, 29, 0.32);
+  --primary: #035a60;
   --primary-strong: #0c4e54;
   --primary-soft: #dceceb;
-  --green: #2f7a36;
+  --green: #1f6b29;
   --green-soft: #dcebd8;
-  --amber: #996211;
+  --amber: #7a4d09;
   --amber-soft: #f1e4c7;
-  --red: #a13544;
+  --red: #8c2a39;
   --red-soft: #ecd6d8;
   --shadow: 0 24px 80px rgba(48, 43, 34, 0.13);
   --shadow-small: 0 8px 28px rgba(48, 43, 34, 0.08);
@@ -33,9 +34,10 @@
   --surface-strong: #23221e;
   --surface-offset: #2c2a25;
   --text: #edebe5;
-  --muted: #aaa69b;
-  --faint: #706c62;
-  --border: rgba(237, 235, 229, 0.14);
+  --muted: #c2bfb4;
+  --faint: #8e8a7e;
+  --border: rgba(237, 235, 229, 0.22);
+  --border-strong: rgba(237, 235, 229, 0.34);
   --primary: #64b5bd;
   --primary-strong: #91d7dd;
   --primary-soft: #20383a;
@@ -92,7 +94,7 @@ button {
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--primary), transparent 35%);
+  outline: 3px solid color-mix(in srgb, var(--primary), transparent 15%);
   outline-offset: 3px;
 }
 
@@ -172,7 +174,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 0 8px;
+  padding: 18px 0 4px;
 }
 
 .brand {
@@ -214,7 +216,7 @@ button {
 .main-stage {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
-  padding: clamp(40px, 7vw, 88px) 0 36px;
+  padding: clamp(16px, 2.4vw, 32px) 0 36px;
 }
 
 .hero-grid {
@@ -335,7 +337,7 @@ input,
 select {
   width: 100%;
   min-height: 54px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-strong);
   color: var(--text);
