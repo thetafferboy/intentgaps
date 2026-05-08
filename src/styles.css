@@ -413,16 +413,25 @@ input::placeholder {
 
 .primary-button[disabled],
 .primary-button[aria-disabled="true"] {
-  opacity: 0.55;
+  background: var(--surface-offset);
+  color: var(--muted);
+  border-color: var(--faint);
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
 }
 
+[data-theme="dark"] .primary-button[disabled],
+[data-theme="dark"] .primary-button[aria-disabled="true"] {
+  background: var(--surface-offset);
+  color: var(--muted);
+  border-color: var(--faint);
+}
+
 .primary-button[disabled]:hover,
 .primary-button[aria-disabled="true"]:hover {
   transform: none;
-  background: var(--primary);
+  background: var(--surface-offset);
 }
 
 .turnstile-panel {
