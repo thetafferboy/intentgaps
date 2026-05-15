@@ -17,7 +17,8 @@ import {
   RefreshCcw,
   Search,
   Sparkles,
-  Sun
+  Sun,
+  Youtube
 } from "lucide-react";
 
 const DEFAULT_TEST_URL = "https://www.pcgamer.com/best-gaming-chairs/";
@@ -1099,6 +1100,16 @@ function Footer() {
           >
             <BlueSkyIcon size={14} />
             <span>BlueSky</span>
+          </a>
+          <a
+            href="https://youtube.com/@mwcsearch"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer-social"
+            aria-label="Mark Williams-Cook on YouTube"
+          >
+            <Youtube size={14} aria-hidden="true" />
+            <span>YouTube</span>
           </a>
         </span>
       </p>
